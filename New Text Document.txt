@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tablet Reminder — Prototype</title>
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--muted:#6b7280;--accent:#2563eb}
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:var(--bg); margin:0; padding:28px; color:#111}
+  .container{max-width:840px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  header h1{font-size:20px;margin:0}
+  .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(17,24,39,0.06)}
+  form{display:grid;grid-template-columns:1fr 140px 120px;gap:10px;align-items:center}
+  input,select,button{padding:10px;border-radius:8px;border:1px solid #e6e9ef;font-size:14px}
+  button{background:var(--accent);color:#fff;border:0;cursor:pointer}
+  .muted{color:var(--muted);font-size:13px;margin-top:8px}
+  .list{margin-top:16px;display:grid;gap:10px}
+  .rem{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;border:1px solid #eef2ff}
+  .time{font-weight:600;color:#0f172a}
+  .small{font-size:12px;color:var(--muted)}
+  .actions button{margin-left:8px;padding:6px 10px;border-radius:6px;border:0;background:#ef4444;color:#fff;cursor:pointer}
+  footer{margin-top:18px;font-size:13px;color:var(--muted)}
+  .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#eef2ff;color:#1e3a8a;font-weight:600}
+  @media(max-width:620px){form{grid-template-columns:1fr} .actions{display:flex;flex-direction:row}}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <img src="" alt="" style="width:44px;height:44px;border-radius:8px;background:#e6eefc">
+    <h1>Tablet Reminder — Prototype</h1>
+  </header>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="small">Project prototype for Hackathon submission</div>
+        <div style="margin-top:6px"><span class="pill">Works in browser</span></div>
+      </div>
+      <div class="small">Status: <strong id="status">Ready</strong></div>
+    </div>
+
+    <hr style="margin:14px 0;border:none;border-top:1px solid #f1f4fb">
+
+    <form id="remForm" onsubmit="return false">
+      <input id="title" placeholder="Reminder text (e.g. Take evening tablet)" required />
+      <input id="date" type="datetime-local" required />
+      <select id="repeat">
+        <option value="none">No repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+      </select>
+      <button id="addBtn">Add Reminder</button>
+    </form>
+    <div class="muted">Notes: reminders saved locally in browser. For production, connect to backend or push notifications.</div>
+
+    <div class="list" id="list"></div>
+
+    <footer>
+      <div class="small">Prototype features: add/edit/delete reminders, local storage, next upcoming reminder calculation.</div>
+    </footer>
+  </div>
+</div>
+
+<script>
+/* Simple reminder prototype */
+const LS_KEY = 'tablet_reminders_v1';
+let reminders = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+
+const el = id => document.getElementById(id);
+const listEl = el('list');
+const statusEl = el('status');
+
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(reminders)); render(); }
+
+function add(title, when, repeat){
+  reminders.push({
+    id: Date.now().toString(36),
+    title: title,
+    when: when,
+    repeat: repeat
+  });
+  reminders.sort((a,b)=> new Date(a.when)-new Date(b.when));
+  save();
+}
+
+function remove(id){
+  reminders = reminders.filter(r=> r.id !== id);
+  save();
+}
+
+function edit(id, newTitle, newWhen, newRepeat){
+  const r = reminders.find(x=>x.id===id);
+  if(!r) return;
+  r.title = newTitle; r.when = newWhen; r.repeat = newRepeat;
+  save();
+}
+
+function nextReminder(){
+  const now = Date.now();
+  for(const r of reminders){
+    const t = new Date(r.when).getTime();
+    if(t >= now) return r;
+  }
+  return null;
+}
+
+function render(){
+  listEl.innerHTML = '';
+  if(reminders.length===0){
+    listEl.innerHTML = '<div class="small">No reminders yet — add one above.</div>';
+  } else {
+    for(const r of reminders){
+      const div = document.createElement('div'); div.className='rem';
+      const left = document.createElement('div');
+      left.innerHTML = `<div style="font-weight:600">${r.title}</div><div class="small">${new Date(r.when).toLocaleString()} · ${r.repeat}</div>`;
+      const right = document.createElement('div'); right.style.display='flex'; right.style.alignItems='center';
+      right.innerHTML = `<div class="time">${timeUntil(r.when)}</div>`;
+      const actions = document.createElement('div'); actions.className='actions';
+      const del = document.createElement('button'); del.textContent='Delete'; del.onclick = ()=> remove(r.id);
+      actions.appendChild(del);
+      right.appendChild(actions);
+      div.appendChild(left); div.appendChild(right);
+      listEl.appendChild(div);
+    }
+  }
+  const nr = nextReminder();
+  statusEl.textContent = nr ? `Next: ${nr.title} at ${new Date(nr.when).toLocaleString()}` : 'No upcoming reminders';
+}
+
+function timeUntil(iso){
+  const t = new Date(iso).getTime() - Date.now();
+  if(t <= 0) return 'Now / overdue';
+  const mins = Math.floor(t/60000);
+  if(mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs/24);
+  return `${days}d`;
+}
+
+/* Form handling */
+el('addBtn').addEventListener('click', ()=>{
+  const title = el('title').value.trim();
+  const when = el('date').value;
+  const repeat = el('repeat').value;
+  if(!title || !when){ alert('Fill title and date/time'); return; }
+  add(title, when, repeat);
+  el('title').value=''; el('date').value=''; el('repeat').value='none';
+});
+
+/* Seed sample if empty (so judges see something) */
+if(reminders.length===0){
+  reminders = [
+    {id:'seed1',title:'Morning tablet',when:new Date(Date.now()+3600*1000).toISOString().slice(0,16),repeat:'daily'},
+    {id:'seed2',title:'Evening tablet',when:new Date(Date.now()+5*3600*1000).toISOString().slice(0,16),repeat:'none'}
+  ];
+  save();
+} else {
+  render();
+}
+
+/* Periodic check (visual) */
+setInterval(render, 10000);
+render();
+</script>
+</body>
+</html>
